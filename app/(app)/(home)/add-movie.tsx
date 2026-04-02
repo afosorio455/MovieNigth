@@ -1,15 +1,21 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useMovies } from '../../../src/hooks/hooks';
+import { useAuth } from '../../../src/hooks/useAuth';
 
 export default function AddMovieScreen() {
   const [title, setTitle] = useState('');
   const [year, setYear] = useState('');
+  const [saving, setSaving] = useState(false);
   const router = useRouter();
+  const { user } = useAuth();
+  const { addMovie } = useMovies(user?.id ?? '');
 
-  const handleAdd = () => {
-    if (!title.trim()) return;
-    // TODO: persist to database
+  const handleAdd = async () => {
+    if (!title.trim() || saving) return;
+    setSaving(true);
+    await addMovie(title, year);
     router.back();
   };
 
@@ -133,13 +139,13 @@ export default function AddMovieScreen() {
         <View style={{ gap: 10 }}>
           <TouchableOpacity
             onPress={handleAdd}
-            disabled={!title.trim()}
+            disabled={!title.trim() || saving}
             style={{
               backgroundColor: '#6366F1',
               paddingVertical: 16,
               borderRadius: 14,
               alignItems: 'center',
-              opacity: title.trim() ? 1 : 0.4,
+              opacity: title.trim() && !saving ? 1 : 0.4,
               shadowColor: '#6366F1',
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.4,
@@ -148,7 +154,7 @@ export default function AddMovieScreen() {
             }}
           >
             <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>
-              Agregar película
+              {saving ? 'Guardando…' : 'Agregar película'}
             </Text>
           </TouchableOpacity>
 

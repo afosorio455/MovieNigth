@@ -1,22 +1,23 @@
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
-
-const MOCK_USERS = [
-  { id: '1', name: 'Andrés', color: '#6366F1' },
-  { id: '2', name: 'María', color: '#EC4899' },
-  { id: '3', name: 'Juan', color: '#F59E0B' },
-  { id: '4', name: 'Laura', color: '#10B981' },
-];
-
-const MOCK_MOVIES = [
-  { id: '1', title: 'Interstellar', year: 2014, addedBy: 'Andrés', addedByColor: '#6366F1' },
-  { id: '2', title: 'Dune: Part Two', year: 2024, addedBy: 'María', addedByColor: '#EC4899' },
-  { id: '3', title: 'The Dark Knight', year: 2008, addedBy: 'Juan', addedByColor: '#F59E0B' },
-  { id: '4', title: 'Inception', year: 2010, addedBy: 'Laura', addedByColor: '#10B981' },
-];
+import { useMovies, useUsers } from '../../../src/hooks/hooks';
+import { useAuth } from '../../../src/hooks/useAuth';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { movies, refetch: refetchMovies } = useMovies(user?.id ?? '');
+  const { users, refetch: refetchUsers } = useUsers();
+
+  // Refresca los datos cada vez que la pantalla toma foco
+  // (p.ej. al volver del modal add-movie)
+  useFocusEffect(
+    useCallback(() => {
+      refetchMovies();
+      refetchUsers();
+    }, [refetchMovies, refetchUsers]),
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
@@ -41,20 +42,20 @@ export default function HomeScreen() {
         {/* Connected users */}
         <View style={{ marginBottom: 24 }}>
           <Text style={{ color: '#4B5563', fontSize: 11, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase', paddingHorizontal: 20, marginBottom: 14 }}>
-            En la sala · {MOCK_USERS.length} personas
+            En la sala · {users.length} {users.length === 1 ? 'persona' : 'personas'}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 18 }}>
-            {MOCK_USERS.map((user) => (
+            {users.map((user) => (
               <View key={user.id} style={{ alignItems: 'center' }}>
                 <View style={{
                   width: 56,
                   height: 56,
                   borderRadius: 28,
-                  backgroundColor: user.color,
+                  backgroundColor: user.avatar_color,
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: 6,
-                  shadowColor: user.color,
+                  shadowColor: user.avatar_color,
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.4,
                   shadowRadius: 6,
@@ -73,12 +74,12 @@ export default function HomeScreen() {
         {/* Stats row */}
         <View style={{ flexDirection: 'row', marginHorizontal: 20, marginBottom: 28, backgroundColor: '#161616', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#2D2D2D' }}>
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: 'bold' }}>{MOCK_MOVIES.length}</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: 'bold' }}>{movies.length}</Text>
             <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Películas</Text>
           </View>
           <View style={{ width: 1, backgroundColor: '#2D2D2D' }} />
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: 'bold' }}>{MOCK_USERS.length}</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: 'bold' }}>{users.length}</Text>
             <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Votantes</Text>
           </View>
           <View style={{ width: 1, backgroundColor: '#2D2D2D' }} />
@@ -110,58 +111,65 @@ export default function HomeScreen() {
 
         {/* Movie cards */}
         <View style={{ paddingHorizontal: 20, gap: 12 }}>
-          {MOCK_MOVIES.map((movie) => (
-            <View
-              key={movie.id}
-              style={{
-                backgroundColor: '#161616',
-                borderRadius: 20,
-                padding: 16,
-                flexDirection: 'row',
-                alignItems: 'center',
-                borderWidth: 1,
-                borderColor: '#2D2D2D',
-              }}
-            >
-              {/* Poster placeholder */}
-              <View style={{
-                width: 62,
-                height: 80,
-                borderRadius: 12,
-                backgroundColor: '#242424',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: 14,
-              }}>
-                <Text style={{ fontSize: 26 }}>🎬</Text>
-              </View>
-              {/* Info */}
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16, marginBottom: 3 }}>
-                  {movie.title}
-                </Text>
-                <Text style={{ color: '#6B7280', fontSize: 13 }}>{movie.year}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
-                  <View style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 9,
-                    backgroundColor: movie.addedByColor,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 6,
-                  }}>
-                    <Text style={{ color: '#FFF', fontSize: 9, fontWeight: 'bold' }}>
-                      {movie.addedBy[0]}
-                    </Text>
-                  </View>
-                  <Text style={{ color: '#6B7280', fontSize: 12 }}>por {movie.addedBy}</Text>
+          {movies.map((movie) => {
+            const addedByUser = users.find((u) => u.id === movie.created_by_user_id);
+            return (
+              <View
+                key={movie.id}
+                style={{
+                  backgroundColor: '#161616',
+                  borderRadius: 20,
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: '#2D2D2D',
+                }}
+              >
+                {/* Poster placeholder */}
+                <View style={{
+                  width: 62,
+                  height: 80,
+                  borderRadius: 12,
+                  backgroundColor: '#242424',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 14,
+                }}>
+                  <Text style={{ fontSize: 26 }}>🎬</Text>
                 </View>
+                {/* Info */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16, marginBottom: 3 }}>
+                    {movie.title}
+                  </Text>
+                  {movie.year ? (
+                    <Text style={{ color: '#6B7280', fontSize: 13 }}>{movie.year}</Text>
+                  ) : null}
+                  {addedByUser ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                      <View style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        backgroundColor: addedByUser.avatar_color,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 6,
+                      }}>
+                        <Text style={{ color: '#FFF', fontSize: 9, fontWeight: 'bold' }}>
+                          {addedByUser.name[0]}
+                        </Text>
+                      </View>
+                      <Text style={{ color: '#6B7280', fontSize: 12 }}>por {addedByUser.name}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                {/* Arrow */}
+                <Text style={{ color: '#3D3D3D', fontSize: 20 }}>›</Text>
               </View>
-              {/* Arrow */}
-              <Text style={{ color: '#3D3D3D', fontSize: 20 }}>›</Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         <View style={{ height: 120 }} />

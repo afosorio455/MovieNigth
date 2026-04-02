@@ -1,17 +1,32 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useAuth } from '@/src/hooks/useAuth';
 import { useRouter } from 'expo-router';
-
-const AVATAR_COLORS = ['#6366F1', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#EF4444'];
+import { useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 export default function LoginScreen() {
-  const [name, setName] = useState('');
-  const [selectedColor, setSelectedColor] = useState(AVATAR_COLORS[0]);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const { login, isLoading } = useAuth();
   const router = useRouter();
 
-  const handleLogin = () => {
-    if (!name.trim()) return;
-    router.replace('/(app)/(home)');
+  const handleLogin = async () => {
+    if (!email.trim() || !password) return;
+    setError('');
+    try {
+      await login({ email: email.trim().toLowerCase(), password });
+      // AuthGuard en _layout.tsx redirige automáticamente
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
+    }
   };
 
   return (
@@ -31,16 +46,43 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        {/* Name input */}
-        <View style={{ marginBottom: 24 }}>
+        {/* Email */}
+        <View style={{ marginBottom: 16 }}>
           <Text style={{ color: '#6B7280', fontSize: 11, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>
-            Tu nombre
+            Email
           </Text>
           <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="¿Cómo te llaman?"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="tu@email.com"
             placeholderTextColor="#4B5563"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            returnKeyType="next"
+            style={{
+              backgroundColor: '#1E1E1E',
+              color: '#FFFFFF',
+              fontSize: 16,
+              paddingHorizontal: 18,
+              paddingVertical: 16,
+              borderRadius: 16,
+              borderWidth: 1.5,
+              borderColor: email ? '#6366F1' : '#2D2D2D',
+            }}
+          />
+        </View>
+
+        {/* Password */}
+        <View style={{ marginBottom: 24 }}>
+          <Text style={{ color: '#6B7280', fontSize: 11, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>
+            Contraseña
+          </Text>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••"
+            placeholderTextColor="#4B5563"
+            secureTextEntry
             returnKeyType="done"
             onSubmitEditing={handleLogin}
             style={{
@@ -51,74 +93,28 @@ export default function LoginScreen() {
               paddingVertical: 16,
               borderRadius: 16,
               borderWidth: 1.5,
-              borderColor: name ? '#6366F1' : '#2D2D2D',
+              borderColor: password ? '#6366F1' : '#2D2D2D',
             }}
           />
         </View>
 
-        {/* Color picker */}
-        <View style={{ marginBottom: 32 }}>
-          <Text style={{ color: '#6B7280', fontSize: 11, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>
-            Tu color
+        {/* Error */}
+        {error ? (
+          <Text style={{ color: '#EF4444', fontSize: 14, textAlign: 'center', marginBottom: 16 }}>
+            {error}
           </Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            {AVATAR_COLORS.map((color) => (
-              <TouchableOpacity
-                key={color}
-                onPress={() => setSelectedColor(color)}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: color,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: selectedColor === color ? 3 : 0,
-                  borderColor: '#FFFFFF',
-                }}
-              >
-                {selectedColor === color && (
-                  <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>✓</Text>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Avatar preview */}
-        <View style={{ alignItems: 'center', marginBottom: 32 }}>
-          <View style={{
-            width: 72,
-            height: 72,
-            borderRadius: 36,
-            backgroundColor: selectedColor,
-            alignItems: 'center',
-            justifyContent: 'center',
-            shadowColor: selectedColor,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.5,
-            shadowRadius: 12,
-            elevation: 8,
-          }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 28, fontWeight: 'bold' }}>
-              {name.trim() ? name.trim()[0].toUpperCase() : '?'}
-            </Text>
-          </View>
-          {name.trim() ? (
-            <Text style={{ color: '#9CA3AF', fontSize: 14, marginTop: 10 }}>{name.trim()}</Text>
-          ) : null}
-        </View>
+        ) : null}
 
         {/* CTA */}
         <TouchableOpacity
           onPress={handleLogin}
-          disabled={!name.trim()}
+          disabled={!email.trim() || !password || isLoading}
           style={{
             backgroundColor: '#6366F1',
             paddingVertical: 16,
             borderRadius: 16,
             alignItems: 'center',
-            opacity: name.trim() ? 1 : 0.4,
+            opacity: email.trim() && password && !isLoading ? 1 : 0.4,
             shadowColor: '#6366F1',
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.45,
@@ -127,7 +123,18 @@ export default function LoginScreen() {
           }}
         >
           <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' }}>
-            Entrar a la sala →
+            {isLoading ? 'Entrando...' : 'Entrar a la sala →'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Register link */}
+        <TouchableOpacity
+          onPress={() => router.push('/(auth)/register')}
+          style={{ marginTop: 24, alignItems: 'center' }}
+        >
+          <Text style={{ color: '#6B7280', fontSize: 14 }}>
+            ¿Sin cuenta?{' '}
+            <Text style={{ color: '#6366F1', fontWeight: '600' }}>Regístrate</Text>
           </Text>
         </TouchableOpacity>
       </View>

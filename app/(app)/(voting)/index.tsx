@@ -1,53 +1,21 @@
-import { useState } from 'react';
+import { useCallback } from 'react';
 import { FlatList, Text, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
-
-const MOCK_MOVIES = [
-  { id: '1', title: 'Interstellar', year: 2014, addedBy: 'Andrés', addedByColor: '#6366F1', likes: 3, dislikes: 1 },
-  { id: '2', title: 'Dune: Part Two', year: 2024, addedBy: 'María', addedByColor: '#EC4899', likes: 2, dislikes: 0 },
-  { id: '3', title: 'The Dark Knight', year: 2008, addedBy: 'Juan', addedByColor: '#F59E0B', likes: 4, dislikes: 1 },
-  { id: '4', title: 'Inception', year: 2010, addedBy: 'Laura', addedByColor: '#10B981', likes: 1, dislikes: 2 },
-];
-
-type VoteMap = { [id: string]: 'like' | 'dislike' | null };
-type CountMap = { [id: string]: { likes: number; dislikes: number } };
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useMovies } from '../../../src/hooks/hooks';
+import { useAuth } from '../../../src/hooks/useAuth';
 
 export default function VotingScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { movies, castVote, refetch } = useMovies(user?.id ?? '');
 
-  const [votes, setVotes] = useState<VoteMap>({});
-  const [counts, setCounts] = useState<CountMap>(
-    MOCK_MOVIES.reduce(
-      (acc, m) => ({ ...acc, [m.id]: { likes: m.likes, dislikes: m.dislikes } }),
-      {}
-    )
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch]),
   );
 
-  const handleVote = (movieId: string, type: 'like' | 'dislike') => {
-    const current = votes[movieId];
-    const prev = counts[movieId];
-    const next = { ...prev };
-    let newVote: 'like' | 'dislike' | null = type;
-
-    if (current === type) {
-      // toggle off
-      if (type === 'like') next.likes = Math.max(0, prev.likes - 1);
-      else next.dislikes = Math.max(0, prev.dislikes - 1);
-      newVote = null;
-    } else {
-      // remove previous vote
-      if (current === 'like') next.likes = Math.max(0, prev.likes - 1);
-      if (current === 'dislike') next.dislikes = Math.max(0, prev.dislikes - 1);
-      // add new vote
-      if (type === 'like') next.likes = next.likes + 1;
-      else next.dislikes = next.dislikes + 1;
-    }
-
-    setVotes((v) => ({ ...v, [movieId]: newVote }));
-    setCounts((c) => ({ ...c, [movieId]: next }));
-  };
-
-  const totalVoted = Object.values(votes).filter(Boolean).length;
+  const totalVoted = movies.filter((m) => m.userVote !== null).length;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
@@ -59,22 +27,21 @@ export default function VotingScreen() {
         </Text>
         {totalVoted > 0 && (
           <Text style={{ color: '#6366F1', fontSize: 13, marginTop: 6 }}>
-            Votaste {totalVoted} de {MOCK_MOVIES.length}
+            Votaste {totalVoted} de {movies.length}
           </Text>
         )}
       </View>
 
       {/* Movie list */}
       <FlatList
-        data={MOCK_MOVIES}
+        data={movies}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => {
-          const myVote = votes[item.id];
-          const count = counts[item.id];
-          const total = count.likes + count.dislikes;
-          const likePercent = total > 0 ? (count.likes / total) * 100 : 0;
+          const myVote = item.userVote;
+          const total = item.likes + item.dislikes;
+          const likePercent = total > 0 ? (item.likes / total) * 100 : 0;
 
           return (
             <View style={{
@@ -99,23 +66,11 @@ export default function VotingScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>{item.title}</Text>
-                  <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 3 }}>{item.year}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-                    <View style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: item.addedByColor,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 5,
-                    }}>
-                      <Text style={{ color: '#FFF', fontSize: 8, fontWeight: 'bold' }}>{item.addedBy[0]}</Text>
-                    </View>
-                    <Text style={{ color: '#6B7280', fontSize: 12 }}>por {item.addedBy}</Text>
-                  </View>
+                  {item.year ? (
+                    <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 3 }}>{item.year}</Text>
+                  ) : null}
                 </View>
-                {myVote && (
+                {myVote ? (
                   <View style={{
                     width: 28,
                     height: 28,
@@ -126,7 +81,7 @@ export default function VotingScreen() {
                   }}>
                     <Text style={{ fontSize: 14 }}>{myVote === 'like' ? '👍' : '👎'}</Text>
                   </View>
-                )}
+                ) : null}
               </View>
 
               {/* Progress bar */}
@@ -144,7 +99,7 @@ export default function VotingScreen() {
               {/* Vote buttons */}
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <TouchableOpacity
-                  onPress={() => handleVote(item.id, 'like')}
+                  onPress={() => castVote(item.id, 'like')}
                   style={{
                     flex: 1,
                     flexDirection: 'row',
@@ -164,12 +119,12 @@ export default function VotingScreen() {
                     fontWeight: '700',
                     fontSize: 15,
                   }}>
-                    {count.likes}
+                    {item.likes}
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={() => handleVote(item.id, 'dislike')}
+                  onPress={() => castVote(item.id, 'dislike')}
                   style={{
                     flex: 1,
                     flexDirection: 'row',
@@ -189,7 +144,7 @@ export default function VotingScreen() {
                     fontWeight: '700',
                     fontSize: 15,
                   }}>
-                    {count.dislikes}
+                    {item.dislikes}
                   </Text>
                 </TouchableOpacity>
               </View>

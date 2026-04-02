@@ -1,16 +1,41 @@
+import { useEffect, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { getMovies, getWinner } from '../../../src/database';
+import type { MovieWithVotes } from '../../../src/types';
 
-const WINNER = { title: 'The Dark Knight', year: 2008, likes: 4, dislikes: 1 };
-const RANKING = [
-  { title: 'Interstellar', year: 2014, likes: 3, dislikes: 1 },
-  { title: 'Dune: Part Two', year: 2024, likes: 2, dislikes: 0 },
-  { title: 'Inception', year: 2010, likes: 1, dislikes: 2 },
-];
+type MovieRow = Omit<MovieWithVotes, 'userVote'>;
+
+const MEDALS = ['🥈', '🥉', '4️⃣', '5️⃣', '6️⃣'];
 
 export default function WinnerScreen() {
   const router = useRouter();
-  const totalWinnerVotes = WINNER.likes + WINNER.dislikes;
+  const [winner, setWinner] = useState<MovieRow | null>(null);
+  const [ranking, setRanking] = useState<MovieRow[]>([]);
+
+  useEffect(() => {
+    async function load() {
+      const [winnerRow, allMovies] = await Promise.all([getWinner(), getMovies()]);
+      setWinner(winnerRow);
+      // El ranking es todas las películas ordenadas por likes desc, excluyendo al ganador
+      const sorted = [...allMovies].sort((a, b) => b.likes - a.likes || a.created_at - b.created_at);
+      setRanking(winnerRow ? sorted.filter((m) => m.id !== winnerRow.id) : sorted);
+    }
+    load();
+  }, []);
+
+  if (!winner) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A0A0A', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: '#6B7280', fontSize: 16 }}>Aún no hay películas con votos</Text>
+      </View>
+    );
+  }
+
+  const totalWinnerVotes = winner.likes + winner.dislikes;
+  const approvalPercent = totalWinnerVotes > 0
+    ? Math.round((winner.likes / totalWinnerVotes) * 100)
+    : 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
@@ -59,94 +84,100 @@ export default function WinnerScreen() {
           </View>
 
           <Text style={{ color: '#FFFFFF', fontSize: 22, fontWeight: 'bold', textAlign: 'center' }}>
-            {WINNER.title}
+            {winner.title}
           </Text>
-          <Text style={{ color: '#6B7280', fontSize: 15, marginTop: 4 }}>{WINNER.year}</Text>
+          {winner.year ? (
+            <Text style={{ color: '#6B7280', fontSize: 15, marginTop: 4 }}>{winner.year}</Text>
+          ) : null}
 
           {/* Vote counts */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20, gap: 24 }}>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ color: '#22C55E', fontSize: 24, fontWeight: 'bold' }}>
-                👍 {WINNER.likes}
+                👍 {winner.likes}
               </Text>
               <Text style={{ color: '#6B7280', fontSize: 11, marginTop: 3 }}>Me gusta</Text>
             </View>
             <View style={{ width: 1, height: 32, backgroundColor: '#2D2D2D' }} />
             <View style={{ alignItems: 'center' }}>
               <Text style={{ color: '#EF4444', fontSize: 24, fontWeight: 'bold' }}>
-                👎 {WINNER.dislikes}
+                👎 {winner.dislikes}
               </Text>
               <Text style={{ color: '#6B7280', fontSize: 11, marginTop: 3 }}>No me gusta</Text>
             </View>
           </View>
 
           {/* Approval bar */}
-          <View style={{ width: '100%', marginTop: 20 }}>
-            <View style={{ height: 6, backgroundColor: '#2D2D2D', borderRadius: 3, overflow: 'hidden' }}>
-              <View style={{
-                height: 6,
-                width: `${Math.round((WINNER.likes / totalWinnerVotes) * 100)}%`,
-                backgroundColor: '#22C55E',
-                borderRadius: 3,
-              }} />
+          {totalWinnerVotes > 0 && (
+            <View style={{ width: '100%', marginTop: 20 }}>
+              <View style={{ height: 6, backgroundColor: '#2D2D2D', borderRadius: 3, overflow: 'hidden' }}>
+                <View style={{
+                  height: 6,
+                  width: `${approvalPercent}%`,
+                  backgroundColor: '#22C55E',
+                  borderRadius: 3,
+                }} />
+              </View>
+              <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 6, textAlign: 'right' }}>
+                {approvalPercent}% aprobación
+              </Text>
             </View>
-            <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 6, textAlign: 'right' }}>
-              {Math.round((WINNER.likes / totalWinnerVotes) * 100)}% aprobación
-            </Text>
-          </View>
+          )}
         </View>
 
         {/* Ranking */}
-        <Text style={{ color: '#4B5563', fontSize: 11, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 14 }}>
-          Clasificación
-        </Text>
-
-        <View style={{ gap: 10, marginBottom: 32 }}>
-          {RANKING.map((movie, index) => {
-            const MEDALS = ['🥈', '🥉', '4️⃣'];
-            return (
-              <View
-                key={movie.title}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: '#161616',
-                  borderRadius: 14,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: '#2D2D2D',
-                }}
-              >
-                <Text style={{ fontSize: 22, marginRight: 12, width: 32 }}>
-                  {MEDALS[index]}
-                </Text>
-                <View style={{
-                  width: 40,
-                  height: 50,
-                  borderRadius: 8,
-                  backgroundColor: '#242424',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: 12,
-                }}>
-                  <Text style={{ fontSize: 18 }}>🎬</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>{movie.title}</Text>
-                  <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{movie.year}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ color: '#22C55E', fontSize: 13, fontWeight: '600' }}>
-                    👍 {movie.likes}
+        {ranking.length > 0 && (
+          <>
+            <Text style={{ color: '#4B5563', fontSize: 11, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 14 }}>
+              Clasificación
+            </Text>
+            <View style={{ gap: 10, marginBottom: 32 }}>
+              {ranking.map((movie, index) => (
+                <View
+                  key={movie.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#161616',
+                    borderRadius: 14,
+                    padding: 14,
+                    borderWidth: 1,
+                    borderColor: '#2D2D2D',
+                  }}
+                >
+                  <Text style={{ fontSize: 22, marginRight: 12, width: 32 }}>
+                    {MEDALS[index] ?? '▪️'}
                   </Text>
-                  <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 2 }}>
-                    👎 {movie.dislikes}
-                  </Text>
+                  <View style={{
+                    width: 40,
+                    height: 50,
+                    borderRadius: 8,
+                    backgroundColor: '#242424',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}>
+                    <Text style={{ fontSize: 18 }}>🎬</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>{movie.title}</Text>
+                    {movie.year ? (
+                      <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>{movie.year}</Text>
+                    ) : null}
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ color: '#22C55E', fontSize: 13, fontWeight: '600' }}>
+                      👍 {movie.likes}
+                    </Text>
+                    <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 2 }}>
+                      👎 {movie.dislikes}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              ))}
+            </View>
+          </>
+        )}
 
         {/* Action buttons */}
         <View style={{ gap: 12 }}>
